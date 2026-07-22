@@ -10,6 +10,8 @@ nightly dbt build and the [churn model](https://github.com/Shivay815/churn-insig
 weekly gated retrain — and makes silent data failures structurally impossible:
 every failure mode either fails CI loudly or lands as an alert.
 
+![Reliability dashboard — real CI history](docs/reliability-dashboard.png)
+
 ## 1. Business Problem
 
 The #1 pain of every data team: *"the dashboard has been wrong for two weeks
