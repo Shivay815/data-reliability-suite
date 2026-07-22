@@ -1,0 +1,63 @@
+name: reliability
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "30 2 * * *" # nightly, after Project A's 02:00 build window
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache Olist raw data
+        uses: actions/cache@v4
+        with:
+          path: ../ecom-analytics-platform/data/raw
+          key: olist-raw-v1
+
+      - name: Build monitored pipeline (Project A)
+        run: make data
+
+      - name: Ingestion contracts (Great Expectations)
+        run: make contracts
+
+      - name: Collect pipeline + model health
+        run: make collect
+
+      - name: Chaos drills (contracts must catch every injected break)
+        run: make chaos
+
+      - name: Commit reliability history (scheduled runs only)
+        if: github.event_name == 'schedule'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add history/
+          git diff --cached --quiet || git commit -m "chore: nightly reliability history [skip ci]"
+          git push
+
+      - name: ALERT — open GitHub issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "🚨 Reliability run failed: $(date -u +%F)" \
+            --body "A contract violation, collector error, or chaos-drill failure occurred. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label incident || true
